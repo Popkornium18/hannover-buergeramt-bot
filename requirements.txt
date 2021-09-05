@@ -1,0 +1,13 @@
+certifi==2021.5.30
+charset-normalizer==2.0.3
+greenlet==1.1.1
+html5lib==1.1
+idna==3.2
+mechanize==0.4.5
+pyTelegramBotAPI==4.0.0
+requests==2.26.0
+schedule==1.1.0
+six==1.16.0
+SQLAlchemy==1.4.23
+urllib3==1.26.6
+webencodings==0.5.1
