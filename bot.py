@@ -49,17 +49,17 @@ def usage(message: telebot.types.Message) -> None:
     next_week: str = (datetime.date.today() + datetime.timedelta(7)).strftime(
         "%d.%m.%Y"
     )
-    reply: str = f"""<b>Der Bot ist noch nicht ganz fertig, solange der Text hier steht brauchst du den Bot nicht nutzen</b>
-
-Du suchst dringend einen Bürgeramt-Termin in Hannover?
+    reply: str = f"""Du suchst dringend einen <b>Bürgeramt-Termin</b> in Hannover?
 Dieser Bot kann dir dabei helfen! Schick einfach eine Nachricht mit deiner Deadline:
 
-/deadline {next_week}
+/deadline {next_week} (Das Datumsformat ist wichtig!)
 
 Danach wird der Bot dich über alle spontanen Termine vor deiner Deadline informieren.
-Wenn du deinen Termin bekommen hast und keine weiteren Benachrichtigungen bekommen willst, dann schicke /stop."""
+Wenn du deinen Termin bekommen hast und keine weiteren Benachrichtigungen bekommen willst, dann schicke /stop.
 
-    BOT.send_message(message.chat.id, reply)
+Den Quellcode dieses Bots findest du auf <a href='https://github.com/Popkornium18/hannover-buergeramt-bot'>GitHub</a>."""
+
+    BOT.send_message(message.chat.id, reply, disable_web_page_preview=True)
 
 
 @BOT.message_handler(commands=["termine", "Termine"])
