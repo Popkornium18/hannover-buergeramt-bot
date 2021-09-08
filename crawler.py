@@ -64,7 +64,7 @@ def _handle_location(loc_link: Link, loc_id: int) -> List[Appointment]:
     return app
 
 
-def get_all_appointments() -> List[Appointment]:
+def download_all_appointments() -> List[Appointment]:
     """Load all appointments from the e-government.hannover-stadt.de"""
     BR.open(START_URL)
     BR.select_form(name="frm_casetype")

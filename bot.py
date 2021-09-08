@@ -7,7 +7,7 @@ import datetime
 from time import sleep
 import telebot
 import schedule
-from crawler import get_all_appointments
+from crawler import download_all_appointments
 from sqlalchemy.orm import Session
 from buergeramt_termine.repositories import (
     AppointmentRepository,
@@ -74,7 +74,7 @@ def earliest_appointments(message: telebot.types.Message) -> None:
         loc_earliest_app = [a for a in earliest if a.location_id == loc_id]
 
         if loc_earliest_app:
-            reply += _format_apps(apps=loc_earliest_app)
+            reply += _format_apps(apps_loc=loc_earliest_app)
 
     BOT.send_message(message.chat.id, reply)
     session.close()
@@ -157,7 +157,7 @@ def new_deadline(message: telebot.types.Message) -> None:
         session.close()
         return
 
-    notification = _format_notification(deadline=user.deadline)
+    notification = notification_stored_apps(deadline=user.deadline)
     session.commit()
     session.close()
 
@@ -189,36 +189,45 @@ def delete_user(message: telebot.types.Message) -> None:
     session.close()
 
 
-def _format_app_list_date(app_list: List[Appointment], date: datetime.date) -> str:
-    max_app_reply = 5
-    app_list_date = [a for a in app_list if a.date_time.date() == date]
+def _format_apps_date(apps_loc_date: List[Appointment], split_at: int = 5) -> str:
+    """Formats a list of appointments on a date for use in a notification.
+    The parameter split_at defines how many appointment times are printed
+    completely per date and defaults to 5.
+    It is assumed that all appointments are on the same date and at the
+    same location"""
+    apps_loc_date.sort()
+
+    date = apps_loc_date[0].date_time.date()
     reply = f"• {date.strftime('%d.%m.%Y')}: "
-    if len(app_list_date) <= max_app_reply:
-        times = ", ".join([a.date_time.strftime("%H:%M") for a in app_list_date])
+
+    if len(apps_loc_date) <= split_at:
+        times = ", ".join([a.date_time.strftime("%H:%M") for a in apps_loc_date])
         reply += f"<i>{times}</i>\n"
     else:
-        split = 3
-        app_list_date_first = app_list_date[:split]
-        app_list_date_rest = app_list_date[split:]
+        # 2 dates less roughly results in a similar line length when shortening
+        shorten_after = split_at - 2
+        app_list_date_first = apps_loc_date[:shorten_after]
+        app_list_date_rest = apps_loc_date[shorten_after:]
         times = ", ".join([a.date_time.strftime("%H:%M") for a in app_list_date_first])
         reply += f"<i>{times}, ... (+{len(app_list_date_rest)})</i>\n"
     return reply
 
 
-def _format_apps(apps: List[Appointment], split_at: int = 5) -> str:
+def _format_apps(apps_loc: List[Appointment], split_at: int = 5) -> str:
     """Formats a list of appointments for use in nofications.
-    The parameter split_at defines how many appointment times are printed
-    completely per date and defaults to 5.
+    The parameter split_at defines how different dates are printed completely
+    and defaults to 5.
     It is assumed that every appointment has the same location"""
-    app_list_dates: List[datetime.date] = sorted({a.date_time.date() for a in apps})
-    reply = f"🏢 <b>{apps[0].location.name}:</b>\n"
-    loc_first = app_list_dates[:split_at]
-    loc_rest = app_list_dates[split_at:]
+    apps_loc_dates: List[datetime.date] = sorted({a.date_time.date() for a in apps_loc})
+    reply = f"🏢 <b>{apps_loc[0].location.name}:</b>\n"
+    loc_first = apps_loc_dates[:split_at]
+    loc_rest = apps_loc_dates[split_at:]
     for date in loc_first:
-        reply += _format_app_list_date(app_list=apps, date=date)
+        apps_loc_date = [a for a in apps_loc if a.date_time.date() == date]
+        reply += _format_apps_date(apps_loc_date=apps_loc_date)
 
     if loc_rest:
-        app_rest = [a for a in apps if a.date_time.date() in loc_rest]
+        app_rest = [a for a in apps_loc if a.date_time.date() in loc_rest]
         if len(app_rest) == 1:
             reply += "• <i>Ein weiterer Termin</i>\n"
         else:
@@ -227,26 +236,49 @@ def _format_apps(apps: List[Appointment], split_at: int = 5) -> str:
     return reply
 
 
-def _format_notification(
+def notification_stored_apps(deadline: datetime.date) -> str:
+    """Creates a notification a for all stored appointments earlier
+    than the deadline"""
+    session = SessionMaker()
+    app_repo = AppointmentRepository(session)
+    early_apps = app_repo.appointments_earlier_than(deadline)
+    if not early_apps:
+        return "Momentan gibt es leider keine Termine vor deiner Deadline."
+
+    early_loc_ids = sorted({a.location_id for a in early_apps})
+
+    reply = "<b><u>Termine vor deiner Deadline:</u></b>\n"
+    for loc_id in early_loc_ids:
+        app_gone_early_loc = [a for a in early_apps if a.location_id == loc_id]
+        logger.debug(
+            "Location %s: %i early appointments", loc_id, len(app_gone_early_loc)
+        )
+        reply += _format_apps(apps_loc=app_gone_early_loc)
+
+    session.close()
+    logger.debug("Reply has length %i", len(reply))
+    return reply
+
+
+def notification_apps_diff(
     deadline: datetime.date,
-    app_cur: List[Appointment] = None,
-    app_old: List[Appointment] = None,
+    apps_cur: List[Appointment],
 ) -> str:
-    """Formats a notification message about appointments earlier than a deadline.
-    app_cur defaults to the currently stored appointments.
-    app_old defaults to []."""
+    """Creates a notification about the differences between the currently
+    stored appointments and a list of newly downloaded appointments"""
     logger.info(
         "Requesting notification for deadline %s", deadline.strftime("%d.%m.%Y")
     )
     session = SessionMaker()
     app_repo = AppointmentRepository(session)
-    app_early = app_repo.appointments_earlier_than(deadline)
-    app_old = [] if app_old is None else app_early
-    app_cur = app_early if app_cur is None else app_cur
-    app_new = [a for a in app_cur if a not in app_old]
-    app_gone = [a for a in app_old if a not in app_cur]
-    logger.debug("app_old: %i appointments", len(app_old))
-    logger.debug("app_cur: %i appointments", len(app_cur))
+    apps_stored_early = app_repo.appointments_earlier_than(deadline)
+    apps_cur_early = [a for a in apps_cur if a.date_time.date() < deadline]
+
+    app_new = [a for a in apps_cur_early if a not in apps_stored_early]
+    app_gone = [a for a in apps_stored_early if a not in apps_cur_early]
+
+    logger.debug("apps_stored_early: %i appointments", len(apps_stored_early))
+    logger.debug("app_cur_early: %i appointments", len(apps_cur_early))
     logger.debug("app_new: %i appointments", len(app_new))
     logger.debug("app_gone: %i appointments", len(app_gone))
 
@@ -281,10 +313,10 @@ def _format_notification(
         )
 
         if app_new_early_loc:
-            reply_new += _format_apps(apps=app_new_early_loc)
+            reply_new += _format_apps(apps_loc=app_new_early_loc)
 
         if app_gone_early_loc:
-            reply_gone += _format_apps(apps=app_gone_early_loc)
+            reply_gone += _format_apps(apps_loc=app_gone_early_loc)
 
     if reply_new:
         reply_new = "<b><u>Neue Termine:</u></b>\n" + reply_new
@@ -309,29 +341,25 @@ def check_appointments_and_notify() -> None:
         )
         return
 
-    users = user_repo.list()
-
-    app_cur = get_all_appointments()
-
     app_repo = AppointmentRepository(session)
-    app_old = app_repo.list()
+    apps_old = app_repo.list()
+    apps_cur = download_all_appointments()
 
-    if app_cur == app_old:
+    if apps_cur == apps_old:
         logger.debug("No changes in appointments")
         return
 
+    users = user_repo.list()
     logger.info("Creating notifications for %i users", len(users))
     for usr in users:
-        reply = _format_notification(
-            deadline=usr.deadline, app_old=app_old, app_cur=app_cur
-        )
+        reply = notification_apps_diff(deadline=usr.deadline, apps_cur=apps_cur)
         if not reply:
             logger.debug("No notification for %i", usr.chat_id)
             continue
         logger.debug("Sending notification to %i", usr.chat_id)
         BOT.send_message(usr.chat_id, reply)
 
-    app_repo.store_new_appointments(app_cur)
+    app_repo.store_new_appointments(apps_cur)
     session.commit()
     session.close()
 
@@ -340,7 +368,7 @@ def _refresh_db() -> None:
     """Loads new Appointments and stores them in the database"""
     session = SessionMaker()
     app_repo = AppointmentRepository(session)
-    app_cur = get_all_appointments()
+    app_cur = download_all_appointments()
     app_repo.store_new_appointments(app_cur)
     session.commit()
     session.close()
