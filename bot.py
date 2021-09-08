@@ -7,12 +7,10 @@ import datetime
 from time import sleep
 import telebot
 import schedule
-from telebot.types import Location, Message
 from crawler import get_all_appointments
 from sqlalchemy.orm import Session
 from buergeramt_termine.repositories import (
     AppointmentRepository,
-    LocationRepository,
     UserRepository,
 )
 from buergeramt_termine.models import Appointment, User
@@ -241,7 +239,6 @@ def _format_notification(
         "Requesting notification for deadline %s", deadline.strftime("%d.%m.%Y")
     )
     session = SessionMaker()
-    loc_repo = LocationRepository(session)
     app_repo = AppointmentRepository(session)
     app_early = app_repo.appointments_earlier_than(deadline)
     app_old = [] if app_old is None else app_early
