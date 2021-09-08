@@ -68,17 +68,15 @@ def earliest_appointments(message: telebot.types.Message) -> None:
     logger.info("Requesting earliest appointments")
     session = SessionMaker()
     app_repo = AppointmentRepository(session)
-    loc_repo = LocationRepository(session)
     earliest = app_repo.earliest(10)
     earliest_loc_id = sorted({a.location_id for a in earliest})
 
     reply = "<b><u>Die 10 frühesten Termine:</u></b>\n"
     for loc_id in earliest_loc_id:
-        loc = loc_repo.get_by_id(loc_id)
-        loc_earliest_app = [a for a in earliest if a.location_id == loc.id]
+        loc_earliest_app = [a for a in earliest if a.location_id == loc_id]
 
         if loc_earliest_app:
-            reply += _format_app_list_location(app_list=loc_earliest_app, loc=loc)
+            reply += _format_apps(apps=loc_earliest_app)
 
     BOT.send_message(message.chat.id, reply)
     session.close()
@@ -209,17 +207,20 @@ def _format_app_list_date(app_list: List[Appointment], date: datetime.date) -> s
     return reply
 
 
-def _format_app_list_location(app_list: List[Appointment], loc: Location) -> str:
-    app_list_dates: List[datetime.date] = sorted({a.date_time.date() for a in app_list})
-    reply = f"🏢 <b>{loc.name}:</b>\n"
-    split = 5
-    loc_first = app_list_dates[:split]
-    loc_rest = app_list_dates[split:]
+def _format_apps(apps: List[Appointment], split_at: int = 5) -> str:
+    """Formats a list of appointments for use in nofications.
+    The parameter split_at defines how many appointment times are printed
+    completely per date and defaults to 5.
+    It is assumed that every appointment has the same location"""
+    app_list_dates: List[datetime.date] = sorted({a.date_time.date() for a in apps})
+    reply = f"🏢 <b>{apps[0].location.name}:</b>\n"
+    loc_first = app_list_dates[:split_at]
+    loc_rest = app_list_dates[split_at:]
     for date in loc_first:
-        reply += _format_app_list_date(app_list=app_list, date=date)
+        reply += _format_app_list_date(app_list=apps, date=date)
 
     if loc_rest:
-        app_rest = [a for a in app_list if a.date_time.date() in loc_rest]
+        app_rest = [a for a in apps if a.date_time.date() in loc_rest]
         if len(app_rest) == 1:
             reply += "• <i>Ein weiterer Termin</i>\n"
         else:
@@ -265,7 +266,6 @@ def _format_notification(
 
     reply_new = reply_gone = ""
     for loc_id in early_loc_ids:
-        cur_loc = loc_repo.get_by_id(loc_id)
         app_new_early_loc = [
             a
             for a in app_new
@@ -277,21 +277,17 @@ def _format_notification(
             if a.location_id == loc_id and a.date_time.date() < deadline
         ]
         logger.debug(
-            "%s: %i new early appointments", cur_loc.name, len(app_new_early_loc)
+            "Location %i: %i new early appointments", loc_id, len(app_new_early_loc)
         )
         logger.debug(
-            "%s: %i early appointments gone", cur_loc.name, len(app_gone_early_loc)
+            "Location %s: %i early appointments gone", loc_id, len(app_gone_early_loc)
         )
 
         if app_new_early_loc:
-            reply_new += _format_app_list_location(
-                app_list=app_new_early_loc, loc=cur_loc
-            )
+            reply_new += _format_apps(apps=app_new_early_loc)
 
         if app_gone_early_loc:
-            reply_gone += _format_app_list_location(
-                app_list=app_gone_early_loc, loc=cur_loc
-            )
+            reply_gone += _format_apps(apps=app_gone_early_loc)
 
     if reply_new:
         reply_new = "<b><u>Neue Termine:</u></b>\n" + reply_new
