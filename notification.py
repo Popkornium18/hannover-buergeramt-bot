@@ -160,7 +160,7 @@ def notification_apps_diff(
     if reply_new:
         reply_new = "<b><u>Neue Termine:</u></b>\n" + reply_new
     if reply_gone:
-        reply_gone = "<b><u>Diese Temine sind weg:</u></b>\n" + reply_gone
+        reply_gone = "<b><u>Diese Termine sind weg:</u></b>\n" + reply_gone
 
     session.close()
     reply = reply_new + reply_gone
