@@ -61,4 +61,4 @@ class User(Base):
         self.__deadline = deadline
 
     def __repr__(self):
-        return f"User({self.chat_id}, {self.deadline.strftime('%Y/%m%d')})"
+        return f"User({self.chat_id}, {self.deadline.strftime('%Y/%m/%d')})"
