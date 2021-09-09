@@ -76,12 +76,12 @@ def earliest_appointments(message: telebot.types.Message) -> None:
 def new_deadline(message: telebot.types.Message) -> None:
     """Adds a new user or modifies the deadline of an existing one"""
     request = message.text.split()
+    next_week: str = (datetime.date.today() + datetime.timedelta(7)).strftime(
+        "%d.%m.%Y"
+    )
     if len(request) < 2:
         logger.warning(
             "Invalid request: %s requires a parameter", new_deadline.__name__
-        )
-        next_week: str = (datetime.date.today() + datetime.timedelta(7)).strftime(
-            "%d.%m.%Y"
         )
         BOT.send_message(message.chat.id, f"Benutzung: /deadline {next_week}")
         return
@@ -93,9 +93,6 @@ def new_deadline(message: telebot.types.Message) -> None:
     except ValueError:
         logger.warning(
             "Invalid request: The deadline %s could not be parsed", request[1]
-        )
-        next_week: str = (datetime.date.today() + datetime.timedelta(7)).strftime(
-            "%d.%m.%Y"
         )
         BOT.send_message(
             message.chat.id,
