@@ -1,9 +1,12 @@
 """A telegram bot that can send notifications about early appointments at the
 citizen centres (Bürgerämter) in Hannover, Germany"""
+import sys
 import threading
 import logging
 import datetime
 from time import sleep
+from types import TracebackType
+from typing import Type
 import telebot
 import schedule
 from crawler import download_all_appointments
@@ -42,6 +45,13 @@ telebot.logger.parent = logger
 log_handler.setLevel(cfg["LOG_LEVEL"])
 logger.setLevel(cfg["LOG_LEVEL"])
 telebot.logger.setLevel(logging.INFO)
+
+
+def exc_handler(exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType):
+    """Logs all uncaught exceptions to the configured logging system"""
+    logger.error("Uncaught exception:", exc_info=(exc_type, exc_val, exc_tb))
+
+sys.excepthook = exc_handler
 
 
 @BOT.message_handler(commands=["start", "Start", "help", "Help", "hilfe", "Hilfe"])
