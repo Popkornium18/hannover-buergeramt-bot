@@ -36,7 +36,7 @@ class Appointment(Base):
         return self.date_time > other.date_time
 
     def __repr__(self):
-        return f"Appointment({self.date_time.strftime('%Y/%m/%d %H:%M')}, {self.location.name})"
+        return f"Appointment({self.date_time.strftime('%Y/%m/%d %H:%M')}, {self.location_id})"
 
 
 class User(Base):
