@@ -30,7 +30,7 @@ pip install wheel
 pip install -r requirements.txt
 ```
 
-If you intend to use `systemd` for logging and want to use MySLQ/MariaDB as
+If you intend to use `systemd` for logging and want to use MySQL/MariaDB as
 your database, you have to install the optional dependencies as well.
 Make sure that you have the `systemd` header files installed.
 On Debian/Ubuntu these headers are provided by `libsystemd-dev`.
