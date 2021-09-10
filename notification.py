@@ -125,6 +125,8 @@ def notification_apps_diff(
         {a.location_id for a in app_new + app_gone if a.date_time.date() < deadline}
     )
 
+    logger.debug("early_loc_ids: %i ids", len(early_loc_ids))
+
     if not early_loc_ids:
         logger.info(
             "No appointments earlier than %s have changed",
@@ -144,17 +146,17 @@ def notification_apps_diff(
             for a in app_gone
             if a.location_id == loc_id and a.date_time.date() < deadline
         ]
-        logger.debug(
-            "Location %i: %i new early appointments", loc_id, len(app_new_early_loc)
-        )
-        logger.debug(
-            "Location %s: %i early appointments gone", loc_id, len(app_gone_early_loc)
-        )
 
         if app_new_early_loc:
+            logger.debug(
+                "Location %i: %i new appointments", loc_id, len(app_new_early_loc)
+            )
             reply_new += _format_apps(apps_loc=app_new_early_loc)
 
         if app_gone_early_loc:
+            logger.debug(
+                "Location %s: %i appointments gone", loc_id, len(app_gone_early_loc)
+            )
             reply_gone += _format_apps(apps_loc=app_gone_early_loc)
 
     if reply_new:

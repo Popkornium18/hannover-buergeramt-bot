@@ -60,7 +60,7 @@ def _handle_location(loc_link: Link, loc_id: int) -> List[Appointment]:
     if len(nav_links) > 1:
         # There's more
         app.extend(_handle_location(loc_link=nav_links[-1], loc_id=loc_id))
-    logger.info("Found %i appointments", len(app))
+    logger.debug("Found %i appointments", len(app))
     return app
 
 
@@ -87,7 +87,7 @@ def download_all_appointments() -> List[Appointment]:
             loc_repo.add(loc)
             session.commit()
 
-        logger.info("Getting appointments for %s", loc)
+        logger.debug("Getting appointments for %s", loc)
         app.extend(_handle_location(loc_link, loc.id))
 
     session.close()
