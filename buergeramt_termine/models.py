@@ -1,3 +1,6 @@
+"""All classes necessary for the Hannover Buergeramt Bot"""
+from __future__ import annotations
+from typing import List
 import datetime
 from sqlalchemy import Column, Date, DateTime, String, BigInteger, Integer, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
@@ -10,8 +13,14 @@ class Location(Base):
     __tablename__ = "locations"
     id = Column(Integer, primary_key=True)
     name = Column(String(512), nullable=False)
-    # TODO: Make type annotation work here
-    appointments = relationship("Appointment", back_populates="location")
+    appointments: List[Appointment] = relationship(
+        "Appointment", back_populates="location"
+    )
+
+    def __init__(self, name: str):
+        self.name = name
+        self.appointments_new: List[Appointment] = []
+        self.appointments_gone: List[Appointment] = []
 
     def __repr__(self):
         return f"Location({self.name}, {self.id})"
