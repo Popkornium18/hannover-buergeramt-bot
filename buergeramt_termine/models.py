@@ -66,12 +66,9 @@ class User(Base):
     chat_id = Column(BigInteger, primary_key=True)
     __deadline = Column(Date, nullable=False)
 
-    def __init__(self, chat_id: int, deadline: datetime.date):
-        self.chat_id = chat_id
-        self.deadline = deadline
-
-    @property
+    @hybrid_property
     def deadline(self) -> datetime.date:
+        """Getter for deadline"""
         return self.__deadline
 
     @deadline.setter
