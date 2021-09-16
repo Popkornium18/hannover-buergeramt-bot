@@ -23,11 +23,18 @@ class Location(Base):
 
     def __init__(self, name: str):
         self.name = name
-        self.appointments_new: List[Appointment] = []
-        self.appointments_gone: List[Appointment] = []
+        self.apps_new: List[Appointment] = []
+        self.apps_gone: List[Appointment] = []
 
     def __repr__(self):
         return f"Location({self.name}, {self.id})"
+
+    def set_apps_new_gone(self, apps: List[Appointment]) -> None:
+        """Takes a list of appointments from different locations and sets the
+        appointments_new and appointments_gone members accordingly"""
+        apps_loc = [a for a in apps if a.location_id == self.id]
+        self.apps_new = [a for a in apps_loc if a not in self.appointments]
+        self.apps_gone = [a for a in self.appointments if a not in apps_loc]
 
 
 class Appointment(Base):
