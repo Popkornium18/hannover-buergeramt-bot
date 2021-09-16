@@ -1,10 +1,20 @@
 """Functions for creating HTML formatted notifications for Telegram"""
-from typing import List
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import datetime
 import logging
-from buergeramt_termine.repositories import AppointmentRepository
 from buergeramt_termine import SessionMaker
-from buergeramt_termine.models import Appointment
+from buergeramt_termine.repositories import (
+    AppointmentRepository,
+    LocationRepository,
+    UserRepository,
+)
+from crawler import download_all_appointments
+
+if TYPE_CHECKING:
+    from buergeramt_termine.models import Appointment
+    from typing import Dict, List
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger("buergeramt_termine.notification")
 

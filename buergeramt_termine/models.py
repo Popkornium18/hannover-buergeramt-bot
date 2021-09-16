@@ -1,9 +1,13 @@
 """All classes necessary for the Hannover Buergeramt Bot"""
 from __future__ import annotations
-from typing import List
+from typing import TYPE_CHECKING
 import datetime
 from sqlalchemy import Column, Date, DateTime, String, BigInteger, Integer, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+
+if TYPE_CHECKING:
+    from typing import List
 
 Base = declarative_base()
 

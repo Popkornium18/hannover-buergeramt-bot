@@ -1,28 +1,33 @@
 """A telegram bot that can send notifications about early appointments at the
 citizen centres (Bürgerämter) in Hannover, Germany"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import sys
 import threading
 import logging
 import datetime
 from time import sleep
-from types import TracebackType
-from typing import Type
 import telebot
 import schedule
-from crawler import download_all_appointments
-from notification import (
-    notification_apps_diff,
-    notification_earliest,
-    notification_stored_apps,
-)
-from sqlalchemy.orm import Session
+from buergeramt_termine import SessionMaker
 from buergeramt_termine.repositories import (
     AppointmentRepository,
+    LocationRepository,
     UserRepository,
 )
 from buergeramt_termine.models import User
-from buergeramt_termine import SessionMaker
+from crawler import download_all_appointments
+from notification import (
+    create_notifications_new_gone,
+    notification_earliest,
+    notification_stored_apps,
+)
 from config import cfg
+
+if TYPE_CHECKING:
+    from typing import Type
+    from types import TracebackType
+    from sqlalchemy.orm import Session
 
 if cfg["LOG"] == "systemd":
     from cysystemd.journal import JournaldLogHandler

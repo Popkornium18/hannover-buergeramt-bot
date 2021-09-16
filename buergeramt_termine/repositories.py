@@ -1,9 +1,15 @@
 """Repository classes for all models"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import logging
 import datetime
-from typing import List
-from sqlalchemy.orm import Session
 from buergeramt_termine.models import Appointment, Location, User
+from sqlalchemy import func
+
+if TYPE_CHECKING:
+    from typing import List, Set
+    from sqlalchemy.orm import Session
+
 
 logger = logging.getLogger("buergeramt_termine.repositories")
 
