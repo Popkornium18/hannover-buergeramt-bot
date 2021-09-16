@@ -124,6 +124,20 @@ class UserRepository:
             logger.warning("No user with chat id %i found", chat_id)
         return user
 
+    def get_by_deadline(self, deadline: datetime.date) -> List[User]:
+        """Get all users with a specific deadline"""
+        logger.debug("Looking up user with deadline %s", deadline.strftime("%Y-%m-%d"))
+        users = self.session.query(User).filter(User.deadline == deadline).all()
+        if not users:
+            logger.info(
+                "No users with deadline %s found", deadline.strftime("%Y-%m-%d")
+            )
+        return users
+
+    def get_deadlines(self) -> Set[datetime.date]:
+        """Returns the deadlines of all users as a set"""
+        return {u.deadline for u in self.list()}
+
     @property
     def empty(self) -> bool:
         """Checks if the bot has users"""
