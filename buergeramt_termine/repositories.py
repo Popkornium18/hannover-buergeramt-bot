@@ -1,9 +1,15 @@
 """Repository classes for all models"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import logging
 import datetime
-from typing import List
-from sqlalchemy.orm import Session
 from buergeramt_termine.models import Appointment, Location, User
+from sqlalchemy import func
+
+if TYPE_CHECKING:
+    from typing import List, Set
+    from sqlalchemy.orm import Session
+
 
 logger = logging.getLogger("buergeramt_termine.repositories")
 
@@ -35,23 +41,6 @@ class AppointmentRepository:
             "Appointments earlier than %s: %i", date.strftime("%Y-%m-%d"), len(earlier)
         )
         return earlier
-
-    def store_new_appointments(self, app_cur: List[Appointment]) -> None:
-        """Store a new list of appointments in the database"""
-        loc_repo = LocationRepository(self.session)
-
-        app_old = self.list()
-        app_new = [a for a in app_cur if a not in app_old]
-        app_gone = [a for a in app_old if a not in app_cur]
-
-        for loc in loc_repo.list():
-            app_new_loc = [a for a in app_new if a.location_id == loc.id]
-            app_gone_loc = [a for a in app_gone if a.location_id == loc.id]
-            if not app_new_loc and not app_gone_loc:
-                continue
-            loc.appointments.extend(app_new_loc)
-            for app in app_gone_loc:
-                self.delete(app)
 
     def earliest(self, count: int = 1) -> List[Appointment]:
         """Return the n earliest appointments"""
@@ -134,6 +123,20 @@ class UserRepository:
         if not user:
             logger.warning("No user with chat id %i found", chat_id)
         return user
+
+    def get_by_deadline(self, deadline: datetime.date) -> List[User]:
+        """Get all users with a specific deadline"""
+        logger.debug("Looking up user with deadline %s", deadline.strftime("%Y-%m-%d"))
+        users = self.session.query(User).filter(User.deadline == deadline).all()
+        if not users:
+            logger.info(
+                "No users with deadline %s found", deadline.strftime("%Y-%m-%d")
+            )
+        return users
+
+    def get_deadlines(self) -> Set[datetime.date]:
+        """Returns the deadlines of all users as a set"""
+        return {u.deadline for u in self.list()}
 
     @property
     def empty(self) -> bool:

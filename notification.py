@@ -1,10 +1,20 @@
 """Functions for creating HTML formatted notifications for Telegram"""
-from typing import List
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import datetime
 import logging
-from buergeramt_termine.repositories import AppointmentRepository
 from buergeramt_termine import SessionMaker
-from buergeramt_termine.models import Appointment
+from buergeramt_termine.repositories import (
+    AppointmentRepository,
+    LocationRepository,
+    UserRepository,
+)
+from crawler import download_all_appointments
+
+if TYPE_CHECKING:
+    from buergeramt_termine.models import Appointment
+    from typing import Dict, List
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger("buergeramt_termine.notification")
 
@@ -33,13 +43,15 @@ def _format_apps_date(apps_loc_date: List[Appointment], split_at: int = 5) -> st
     return reply
 
 
-def _format_apps(apps_loc: List[Appointment], split_at: int = 5) -> str:
+def _format_apps(apps_loc: List[Appointment], name: str, split_at: int = 5) -> str:
     """Formats a list of appointments for use in nofications.
     The parameter split_at defines how different dates are printed completely
     and defaults to 5.
     It is assumed that every appointment has the same location"""
+    if not apps_loc:
+        return ""
     apps_loc_dates: List[datetime.date] = sorted({a.date_time.date() for a in apps_loc})
-    reply = f"🏢 <b>{apps_loc[0].location.name}:</b>\n"
+    reply = f"🏢 <b>{name}:</b>\n"
     loc_first = apps_loc_dates[:split_at]
     loc_rest = apps_loc_dates[split_at:]
     for date in loc_first:
@@ -60,17 +72,19 @@ def notification_earliest(limit: int = 10) -> str:
     """Returns a notification about the n earliest appointments. The limit
     parameter specifies how many appointments should be included. By default
     10 appointments are returned"""
-    session = SessionMaker()
+    session: Session = SessionMaker()
     app_repo = AppointmentRepository(session)
+    loc_repo = LocationRepository(session)
     earliest = app_repo.earliest(limit)
     earliest_loc_id = sorted({a.location_id for a in earliest})
 
     reply = f"<b><u>Die {limit} frühesten Termine:</u></b>\n"
     for loc_id in earliest_loc_id:
-        loc_earliest_app = [a for a in earliest if a.location_id == loc_id]
+        loc = loc_repo.get_by_id(loc_id)
+        loc_earliest_app = [a for a in earliest if a.location_id == loc.id]
 
         if loc_earliest_app:
-            reply += _format_apps(apps_loc=loc_earliest_app)
+            reply += _format_apps(apps_loc=loc_earliest_app, name=loc.name)
 
     return reply
 
@@ -78,8 +92,9 @@ def notification_earliest(limit: int = 10) -> str:
 def notification_stored_apps(deadline: datetime.date) -> str:
     """Creates a notification a for all stored appointments earlier
     than the deadline"""
-    session = SessionMaker()
+    session: Session = SessionMaker()
     app_repo = AppointmentRepository(session)
+    loc_repo = LocationRepository(session)
     early_apps = app_repo.appointments_earlier_than(deadline)
     if not early_apps:
         return "Momentan gibt es leider keine Termine vor deiner Deadline."
@@ -88,83 +103,63 @@ def notification_stored_apps(deadline: datetime.date) -> str:
 
     reply = "<b><u>Termine vor deiner Deadline:</u></b>\n"
     for loc_id in early_loc_ids:
-        app_gone_early_loc = [a for a in early_apps if a.location_id == loc_id]
+        loc = loc_repo.get_by_id(loc_id)
+        app_gone_early_loc = [a for a in early_apps if a.location_id == loc.id]
         logger.debug(
-            "Location %s: %i early appointments", loc_id, len(app_gone_early_loc)
+            "Location %s: %i early appointments", loc.name, len(app_gone_early_loc)
         )
-        reply += _format_apps(apps_loc=app_gone_early_loc)
+        reply += _format_apps(apps_loc=app_gone_early_loc, name=loc.name)
 
     session.close()
     logger.debug("Reply has length %i", len(reply))
     return reply
 
 
-def notification_apps_diff(
-    deadline: datetime.date,
-    apps_cur: List[Appointment],
-) -> str:
-    """Creates a notification about the differences between the currently
-    stored appointments and a list of newly downloaded appointments"""
-    logger.info(
-        "Requesting notification for deadline %s", deadline.strftime("%d.%m.%Y")
-    )
-    session = SessionMaker()
+def create_notifications_new_gone() -> Dict[datetime.date, str]:
+    """Downloads new appointments and returns a notification for each deadline
+    in the database. After that the new appointments are persisted"""
+    session: Session = SessionMaker()
     app_repo = AppointmentRepository(session)
-    apps_stored_early = app_repo.appointments_earlier_than(deadline)
-    apps_cur_early = [a for a in apps_cur if a.date_time.date() < deadline]
+    apps_cur = download_all_appointments()
 
-    app_new = [a for a in apps_cur_early if a not in apps_stored_early]
-    app_gone = [a for a in apps_stored_early if a not in apps_cur_early]
+    if apps_cur == app_repo.list():
+        logger.debug("No changes in appointments")
+        return {}
 
-    logger.debug("apps_stored_early: %i appointments", len(apps_stored_early))
-    logger.debug("app_cur_early: %i appointments", len(apps_cur_early))
-    logger.debug("app_new: %i appointments", len(app_new))
-    logger.debug("app_gone: %i appointments", len(app_gone))
+    loc_repo = LocationRepository(session)
+    locs = loc_repo.list()
 
-    early_loc_ids = sorted(
-        {a.location_id for a in app_new + app_gone if a.date_time.date() < deadline}
-    )
+    for loc in locs:
+        loc.set_apps_new_gone(apps=apps_cur)
 
-    logger.debug("early_loc_ids: %i ids", len(early_loc_ids))
+    user_repo = UserRepository(session)
+    deadlines_rev = sorted(user_repo.get_deadlines(), reverse=True)
+    notifications: Dict[datetime.date, str] = {}
+    for deadline in deadlines_rev:
+        reply_new = reply_gone = ""
 
-    if not early_loc_ids:
-        logger.info(
-            "No appointments earlier than %s have changed",
-            deadline.strftime("%d.%m.%Y"),
-        )
-        return ""
+        for loc in locs:
+            loc_new_early = [a for a in loc.apps_new if a.date_time.date() < deadline]
+            loc_gone_early = [a for a in loc.apps_gone if a.date_time.date() < deadline]
+            reply_new += _format_apps(apps_loc=loc_new_early, name=loc.name)
+            reply_gone += _format_apps(apps_loc=loc_gone_early, name=loc.name)
 
-    reply_new = reply_gone = ""
-    for loc_id in early_loc_ids:
-        app_new_early_loc = [
-            a
-            for a in app_new
-            if a.location_id == loc_id and a.date_time.date() < deadline
-        ]
-        app_gone_early_loc = [
-            a
-            for a in app_gone
-            if a.location_id == loc_id and a.date_time.date() < deadline
-        ]
+        if reply_new:
+            reply_new = "<b><u>Neue Termine:</u></b>\n" + reply_new + "\n"
+        if reply_gone:
+            reply_gone = "<b><u>Diese Termine sind weg:</u></b>\n" + reply_gone
 
-        if app_new_early_loc:
-            logger.debug(
-                "Location %i: %i new appointments", loc_id, len(app_new_early_loc)
-            )
-            reply_new += _format_apps(apps_loc=app_new_early_loc)
+        notification = reply_new + reply_gone
+        if notification:
+            notifications[deadline] = notification
+        else:
+            break
 
-        if app_gone_early_loc:
-            logger.debug(
-                "Location %s: %i appointments gone", loc_id, len(app_gone_early_loc)
-            )
-            reply_gone += _format_apps(apps_loc=app_gone_early_loc)
+    for loc in locs:
+        loc.appointments.extend(loc.apps_new)
+        for app in loc.apps_gone:
+            app_repo.delete(app)
 
-    if reply_new:
-        reply_new = "<b><u>Neue Termine:</u></b>\n" + reply_new
-    if reply_gone:
-        reply_gone = "<b><u>Diese Termine sind weg:</u></b>\n" + reply_gone
-
+    session.commit()
     session.close()
-    reply = reply_new + reply_gone
-    logger.debug("Reply has length %i", len(reply))
-    return reply
+    return notifications

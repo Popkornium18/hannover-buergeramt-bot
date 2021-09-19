@@ -1,14 +1,20 @@
-from typing import List
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import logging
 import re
 import urllib.parse as urlparse
 from urllib.parse import parse_qs
-from mechanize import Browser, HTMLForm, Link
-from sqlalchemy.orm import Session
+from mechanize import Browser
 import datetime
 from buergeramt_termine.models import Location, Appointment
 from buergeramt_termine.repositories import LocationRepository
 from buergeramt_termine import SessionMaker
+
+if TYPE_CHECKING:
+    from mechanize import HTMLForm, Link
+    from sqlalchemy.orm import Session
+    from typing import List
+
 
 logger = logging.getLogger("buergeramt_termine.crawler")
 

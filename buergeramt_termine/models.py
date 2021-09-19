@@ -1,6 +1,13 @@
+"""All classes necessary for the Hannover Buergeramt Bot"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import datetime
 from sqlalchemy import Column, Date, DateTime, String, BigInteger, Integer, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+
+if TYPE_CHECKING:
+    from typing import List
 
 Base = declarative_base()
 
@@ -10,11 +17,24 @@ class Location(Base):
     __tablename__ = "locations"
     id = Column(Integer, primary_key=True)
     name = Column(String(512), nullable=False)
-    # TODO: Make type annotation work here
-    appointments = relationship("Appointment", back_populates="location")
+    appointments: List[Appointment] = relationship(
+        "Appointment", back_populates="location"
+    )
+
+    def __init__(self, name: str):
+        self.name = name
+        self.apps_new: List[Appointment] = []
+        self.apps_gone: List[Appointment] = []
 
     def __repr__(self):
         return f"Location({self.name}, {self.id})"
+
+    def set_apps_new_gone(self, apps: List[Appointment]) -> None:
+        """Takes a list of appointments from different locations and sets the
+        appointments_new and appointments_gone members accordingly"""
+        apps_loc = [a for a in apps if a.location_id == self.id]
+        self.apps_new = [a for a in apps_loc if a not in self.appointments]
+        self.apps_gone = [a for a in self.appointments if a not in apps_loc]
 
 
 class Appointment(Base):
@@ -46,12 +66,9 @@ class User(Base):
     chat_id = Column(BigInteger, primary_key=True)
     __deadline = Column(Date, nullable=False)
 
-    def __init__(self, chat_id: int, deadline: datetime.date):
-        self.chat_id = chat_id
-        self.deadline = deadline
-
-    @property
+    @hybrid_property
     def deadline(self) -> datetime.date:
+        """Getter for deadline"""
         return self.__deadline
 
     @deadline.setter

@@ -1,28 +1,33 @@
 """A telegram bot that can send notifications about early appointments at the
 citizen centres (Bürgerämter) in Hannover, Germany"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import sys
 import threading
 import logging
 import datetime
 from time import sleep
-from types import TracebackType
-from typing import Type
 import telebot
 import schedule
-from crawler import download_all_appointments
-from notification import (
-    notification_apps_diff,
-    notification_earliest,
-    notification_stored_apps,
-)
-from sqlalchemy.orm import Session
+from buergeramt_termine import SessionMaker
 from buergeramt_termine.repositories import (
     AppointmentRepository,
+    LocationRepository,
     UserRepository,
 )
 from buergeramt_termine.models import User
-from buergeramt_termine import SessionMaker
+from crawler import download_all_appointments
+from notification import (
+    create_notifications_new_gone,
+    notification_earliest,
+    notification_stored_apps,
+)
 from config import cfg
+
+if TYPE_CHECKING:
+    from typing import Type
+    from types import TracebackType
+    from sqlalchemy.orm import Session
 
 if cfg["LOG"] == "systemd":
     from cysystemd.journal import JournaldLogHandler
@@ -47,9 +52,10 @@ logger.setLevel(cfg["LOG_LEVEL"])
 telebot.logger.setLevel(logging.INFO)
 
 
-def exc_handler(exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType):
+def exc_handler(e_type: Type[BaseException], e_val: BaseException, e_tb: TracebackType):
     """Logs all uncaught exceptions to the configured logging system"""
-    logger.error("Uncaught exception:", exc_info=(exc_type, exc_val, exc_tb))
+    logger.error("Uncaught exception:", exc_info=(e_type, e_val, e_tb))
+
 
 sys.excepthook = exc_handler
 
@@ -188,37 +194,26 @@ def delete_user(message: telebot.types.Message) -> None:
     session.close()
 
 
-def check_appointments_and_notify() -> None:
+def notify() -> None:
     """Loads the current appointments and sends each user a notification about
     new appointments and appointments that are no longer available"""
     session: Session = SessionMaker()
     user_repo = UserRepository(session)
     if user_repo.empty:
         session.close()
-        logger.debug(
-            "No current users, skipping %s", check_appointments_and_notify.__name__
-        )
+        logger.debug("No current users, skipping %s", notify.__name__)
         return
 
-    app_repo = AppointmentRepository(session)
-    apps_old = app_repo.list()
-    apps_cur = download_all_appointments()
+    notifications = create_notifications_new_gone()
 
-    if apps_cur == apps_old:
-        logger.debug("No changes in appointments")
-        return
+    if not notifications:
+        logger.info("No user needs to be notified")
+    else:
+        for deadline, notification in notifications.items():
+            for usr in user_repo.get_by_deadline(deadline):
+                logger.debug("Sending notification to %i", usr.chat_id)
+                BOT.send_message(usr.chat_id, notification)
 
-    users = user_repo.list()
-    logger.info("Creating notifications for %i users", len(users))
-    for usr in users:
-        reply = notification_apps_diff(deadline=usr.deadline, apps_cur=apps_cur)
-        if not reply:
-            logger.debug("No notification for %i", usr.chat_id)
-            continue
-        logger.debug("Sending notification to %i", usr.chat_id)
-        BOT.send_message(usr.chat_id, reply)
-
-    app_repo.store_new_appointments(apps_cur)
     session.commit()
     session.close()
 
@@ -226,9 +221,16 @@ def check_appointments_and_notify() -> None:
 def _refresh_db() -> None:
     """Loads new Appointments and stores them in the database"""
     session = SessionMaker()
+    loc_repo = LocationRepository(session)
     app_repo = AppointmentRepository(session)
     app_cur = download_all_appointments()
-    app_repo.store_new_appointments(app_cur)
+
+    for loc in loc_repo.list():
+        loc.set_apps_new_gone(app_cur)
+        loc.appointments.extend(loc.apps_new)
+        for app in loc.apps_gone:
+            app_repo.delete(app)
+
     session.commit()
     session.close()
 
@@ -255,7 +257,7 @@ def refresh_if_unused() -> None:
 
 def _setup_schedule() -> None:
     """Sets up and runs recurring jobs"""
-    schedule.every(5).minutes.do(check_appointments_and_notify)
+    schedule.every(5).minutes.do(notify)
     schedule.every(4).hours.do(refresh_if_unused)
     while True:
         schedule.run_pending()
