@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import datetime
 import logging
+from urllib.error import URLError
 from buergeramt_termine import SessionMaker
 from buergeramt_termine.repositories import (
     AppointmentRepository,
@@ -118,9 +119,14 @@ def notification_stored_apps(deadline: datetime.date) -> str:
 def create_notifications_new_gone() -> Dict[datetime.date, str]:
     """Downloads new appointments and returns a notification for each deadline
     in the database. After that the new appointments are persisted"""
+    try:
+        apps_cur = download_all_appointments()
+    except URLError:
+        logger.error("Error occured during download of appointments", exc_info=True)
+        return {}
+
     session: Session = SessionMaker()
     app_repo = AppointmentRepository(session)
-    apps_cur = download_all_appointments()
 
     if apps_cur == app_repo.list():
         logger.debug("No changes in appointments")
