@@ -40,7 +40,7 @@ else:
         logging.Formatter("[%(name)s:%(asctime)s:%(levelname)s] %(message)s")
     )
 
-BOT = telebot.AsyncTeleBot(cfg["API_KEY"], parse_mode="HTML")
+bot = telebot.AsyncTeleBot(cfg["API_KEY"], parse_mode="HTML")
 
 logger = logging.getLogger("buergeramt_termine")
 logger.addHandler(log_handler)
@@ -60,7 +60,7 @@ def exc_handler(e_type: Type[BaseException], e_val: BaseException, e_tb: Traceba
 sys.excepthook = exc_handler
 
 
-@BOT.message_handler(commands=["start", "Start", "help", "Help", "hilfe", "Hilfe"])
+@bot.message_handler(commands=["start", "Start", "help", "Help", "hilfe", "Hilfe"])
 def usage(message: telebot.types.Message) -> None:
     """Replies with usage information"""
     logger.info("Requesting usage info")
@@ -77,18 +77,18 @@ Wenn du deinen Termin bekommen hast und keine weiteren Benachrichtigungen bekomm
 
 Den Quellcode dieses Bots findest du auf <a href='https://github.com/Popkornium18/hannover-buergeramt-bot'>GitHub</a>."""
 
-    BOT.send_message(message.chat.id, reply, disable_web_page_preview=True)
+    bot.send_message(message.chat.id, reply, disable_web_page_preview=True)
 
 
-@BOT.message_handler(commands=["termine", "Termine"])
+@bot.message_handler(commands=["termine", "Termine"])
 def earliest_appointments(message: telebot.types.Message) -> None:
     """Sends the earliest 10 appointments currently available"""
     logger.info("Requesting earliest appointments")
     reply = notification_earliest()
-    BOT.send_message(message.chat.id, reply)
+    bot.send_message(message.chat.id, reply)
 
 
-@BOT.message_handler(commands=["deadline", "Deadline"])
+@bot.message_handler(commands=["deadline", "Deadline"])
 def new_deadline(message: telebot.types.Message) -> None:
     """Adds a new user or modifies the deadline of an existing one"""
     request = message.text.split()
@@ -99,7 +99,7 @@ def new_deadline(message: telebot.types.Message) -> None:
         logger.warning(
             "Invalid request: %s requires a parameter", new_deadline.__name__
         )
-        BOT.send_message(message.chat.id, f"Benutzung: /deadline {next_week}")
+        bot.send_message(message.chat.id, f"Benutzung: /deadline {next_week}")
         return
 
     try:
@@ -110,7 +110,7 @@ def new_deadline(message: telebot.types.Message) -> None:
         logger.warning(
             "Invalid request: The deadline %s could not be parsed", request[1]
         )
-        BOT.send_message(
+        bot.send_message(
             message.chat.id,
             f"Das Datum hat nicht das richtige Format. Benutzung: /datum {next_week}",
         )
@@ -132,7 +132,7 @@ def new_deadline(message: telebot.types.Message) -> None:
             f"Späteste Deadline: <b>{date_considered_early.strftime('%d.%m.%Y')}</b>.\n"
         )
         reply += "Benutze /termine um die frühesten Termine anzuzeigen."
-        BOT.send_message(message.chat.id, reply)
+        bot.send_message(message.chat.id, reply)
         session.close()
         return
 
@@ -142,20 +142,20 @@ def new_deadline(message: telebot.types.Message) -> None:
         if not user:
             user = User(chat_id=message.chat.id, deadline=deadline)
             user_repo.add(user)
-            BOT.send_message(
+            bot.send_message(
                 message.chat.id,
                 f"Du bekommst jetzt eine Benachrichtigung über alle Termine vor dem {deadline_str}.",
             )
         else:
             logger.info("Changing deadline of user %i", user.chat_id)
             user.deadline = deadline
-            BOT.send_message(
+            bot.send_message(
                 message.chat.id,
                 f"Deine Deadline wurde aktualisiert: {deadline_str}.",
             )
     except ValueError:
         logger.warning("Invalid request: Deadline %s is in the past", deadline_str)
-        BOT.send_message(
+        bot.send_message(
             message.chat.id,
             "Die Deadline darf nicht in der Vergangenheit liegen.",
         )
@@ -167,10 +167,10 @@ def new_deadline(message: telebot.types.Message) -> None:
     session.close()
 
     if notification:
-        BOT.send_message(message.chat.id, notification)
+        bot.send_message(message.chat.id, notification)
 
 
-@BOT.message_handler(commands=["stop", "Stop"])
+@bot.message_handler(commands=["stop", "Stop"])
 def delete_user(message: telebot.types.Message) -> None:
     """Deletes an existing user"""
     session: Session = SessionMaker()
@@ -178,7 +178,7 @@ def delete_user(message: telebot.types.Message) -> None:
     user = repo.get_by_chat_id(message.chat.id)
     if user is None:
         logger.warning("Invalid request: User %i does not exist", message.chat.id)
-        BOT.send_message(
+        bot.send_message(
             message.chat.id,
             "Du bekommst noch keine Benachrichtigungen. Benutze /deadline um die Benachrichtigungen zu aktivieren.",
         )
@@ -186,7 +186,7 @@ def delete_user(message: telebot.types.Message) -> None:
         return
 
     repo.delete(user)
-    BOT.send_message(
+    bot.send_message(
         message.chat.id,
         "Du bekommst keine weiteren Benachrichtigungen. Benutze /deadline um die Benachrichtigungen wieder zu aktivieren.",
     )
@@ -212,7 +212,7 @@ def notify() -> None:
         for deadline, notification in notifications.items():
             for usr in user_repo.get_by_deadline(deadline):
                 logger.info("Sending notification to %i", usr.chat_id)
-                BOT.send_message(usr.chat_id, notification)
+                bot.send_message(usr.chat_id, notification)
 
     session.commit()
     session.close()
@@ -268,7 +268,7 @@ def main():
     _import_appointments_if_db_empty()
     thread_schedule = threading.Thread(target=_setup_schedule)
     thread_schedule.start()
-    BOT.polling(none_stop=True)
+    bot.polling(none_stop=True)
 
 
 if __name__ == "__main__":
