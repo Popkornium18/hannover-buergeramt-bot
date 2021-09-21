@@ -23,12 +23,12 @@ class AppointmentRepository:
     def add(self, appointment: Appointment) -> None:
         """Persist a new Appointment object"""
         self.session.add(appointment)
-        logger.info("Added new appointment %s", appointment)
+        logger.debug("Added new appointment %s", appointment)
 
     def delete(self, appointment: Appointment) -> None:
         """Delete an existing Appointment object from the database"""
         self.session.delete(appointment)
-        logger.info("Deleted appointment %s", appointment)
+        logger.debug("Deleted appointment %s", appointment)
 
     def list(self) -> List[Appointment]:
         """Get all Appointment objects"""

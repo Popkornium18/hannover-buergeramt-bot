@@ -201,7 +201,7 @@ def notify() -> None:
     user_repo = UserRepository(session)
     if user_repo.empty:
         session.close()
-        logger.debug("No current users, skipping %s", notify.__name__)
+        logger.info("No current users, skipping %s", notify.__name__)
         return
 
     notifications = create_notifications_new_gone()
@@ -211,7 +211,7 @@ def notify() -> None:
     else:
         for deadline, notification in notifications.items():
             for usr in user_repo.get_by_deadline(deadline):
-                logger.debug("Sending notification to %i", usr.chat_id)
+                logger.info("Sending notification to %i", usr.chat_id)
                 BOT.send_message(usr.chat_id, notification)
 
     session.commit()
@@ -250,7 +250,7 @@ def refresh_if_unused() -> None:
     session = SessionMaker()
     user_repo = UserRepository(session)
     if user_repo.empty:
-        logger.info("No users, only downloading appointments once a day")
+        logger.info("Downloading appointments once every 4 hours")
         _refresh_db()
     session.close()
 
