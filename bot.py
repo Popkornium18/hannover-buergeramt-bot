@@ -268,7 +268,7 @@ def main():
     _import_appointments_if_db_empty()
     thread_schedule = threading.Thread(target=_setup_schedule)
     thread_schedule.start()
-    bot.polling(none_stop=True)
+    bot.infinity_polling()
 
 
 if __name__ == "__main__":
