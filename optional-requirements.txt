@@ -1,4 +1,4 @@
-charset-normalizer==2.0.4
+charset-normalizer==2.0.6
 cysystemd==1.4.8
 greenlet==1.1.1
 PyMySQL==1.0.2
