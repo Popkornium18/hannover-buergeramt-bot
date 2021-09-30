@@ -73,7 +73,7 @@ class User(Base):
 
     @deadline.setter
     def deadline(self, deadline: datetime.date) -> None:
-        if deadline < datetime.date.today():
+        if deadline <= datetime.date.today():
             raise ValueError("The deadline must not be in the past")
         self.__deadline = deadline
 
