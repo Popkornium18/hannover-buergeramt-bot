@@ -255,10 +255,25 @@ def refresh_if_unused() -> None:
     session.close()
 
 
+def clean_old_users() -> None:
+    """Deletes users whose deadline is today and sends a notification about it"""
+    session = SessionMaker()
+    user_repo = UserRepository(session)
+    message = "Die Benachrichtigungen wurden automatisch deaktiviert. Benutze /deadline um sie wieder zu aktivieren."
+    to_delete = user_repo.get_by_deadline(datetime.date.today())
+    for user in to_delete:
+        bot.send_message(user.chat_id, message)
+        user_repo.delete(user)
+    logger.info("Deleted %i users", len(to_delete))
+    session.commit()
+    session.close()
+
+
 def _setup_schedule() -> None:
     """Sets up and runs recurring jobs"""
     schedule.every(5).minutes.do(notify)
     schedule.every(4).hours.do(refresh_if_unused)
+    schedule.every().day.at("00:00").do(clean_old_users)
     while True:
         schedule.run_pending()
         sleep(1)
