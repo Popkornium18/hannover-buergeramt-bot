@@ -201,17 +201,17 @@ def notify() -> None:
     user_repo = UserRepository(session)
     if user_repo.empty:
         session.close()
-        logger.info("No current users, skipping %s", notify.__name__)
+        logger.debug("No current users, skipping %s", notify.__name__)
         return
 
     notifications = create_notifications_new_gone()
 
     if not notifications:
-        logger.info("No user needs to be notified")
+        logger.debug("No user needs to be notified")
     else:
         for deadline, notification in notifications.items():
             for usr in user_repo.get_by_deadline(deadline):
-                logger.info("Sending notification to %i", usr.chat_id)
+                logger.debug("Sending notification to %i", usr.chat_id)
                 bot.send_message(usr.chat_id, notification)
 
     session.commit()
