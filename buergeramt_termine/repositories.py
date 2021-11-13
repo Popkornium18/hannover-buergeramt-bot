@@ -124,6 +124,16 @@ class UserRepository:
             logger.warning("No user with chat id %i found", chat_id)
         return user
 
+    def get_deadline_earlier_than(self, deadline: datetime.date) -> List[User]:
+        """Get all users with a deadline that is equal or earlier
+        than the given deadline parameter"""
+        logger.debug(
+            "Looking up users with deadline earlier than id %s",
+            deadline.strftime("%Y-%m-%d"),
+        )
+        users = self.session.query(User).filter(User.deadline <= deadline).all()
+        return users
+
     def get_by_deadline(self, deadline: datetime.date) -> List[User]:
         """Get all users with a specific deadline"""
         logger.debug("Looking up user with deadline %s", deadline.strftime("%Y-%m-%d"))

@@ -150,14 +150,12 @@ def new_deadline(message: telebot.types.Message) -> None:
             logger.info("Changing deadline of user %i", user.chat_id)
             user.deadline = deadline
             bot.send_message(
-                message.chat.id,
-                f"Deine Deadline wurde aktualisiert: {deadline_str}.",
+                message.chat.id, f"Deine Deadline wurde aktualisiert: {deadline_str}.",
             )
     except ValueError:
         logger.warning("Invalid request: Deadline %s is in the past", deadline_str)
         bot.send_message(
-            message.chat.id,
-            "Die Deadline darf nicht in der Vergangenheit liegen.",
+            message.chat.id, "Die Deadline darf nicht in der Vergangenheit liegen.",
         )
         session.close()
         return
@@ -264,7 +262,7 @@ def clean_old_users() -> None:
     session = SessionMaker()
     user_repo = UserRepository(session)
     message = "Die Benachrichtigungen wurden automatisch deaktiviert. Benutze /deadline um sie wieder zu aktivieren."
-    to_delete = user_repo.get_by_deadline(datetime.date.today())
+    to_delete = user_repo.get_deadline_earlier_than(datetime.date.today())
     for user in to_delete:
         bot.send_message(user.chat_id, message)
         user_repo.delete(user)
