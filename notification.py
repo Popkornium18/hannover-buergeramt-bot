@@ -10,7 +10,7 @@ from buergeramt_termine.repositories import (
     LocationRepository,
     UserRepository,
 )
-from crawler import download_all_appointments
+from crawler import DownloadException, download_all_appointments
 
 if TYPE_CHECKING:
     from buergeramt_termine.models import Appointment
@@ -121,8 +121,7 @@ def create_notifications_new_gone() -> Dict[datetime.date, str]:
     in the database. After that the new appointments are persisted"""
     try:
         apps_cur = download_all_appointments()
-    except URLError:
-        logger.error("Error occured during download of appointments", exc_info=True)
+    except DownloadException:
         return {}
 
     session: Session = SessionMaker()

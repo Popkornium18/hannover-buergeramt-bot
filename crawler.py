@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import logging
 import re
+from urllib.error import URLError
 import urllib.parse as urlparse
 from urllib.parse import parse_qs
 from mechanize import Browser
@@ -14,6 +15,12 @@ if TYPE_CHECKING:
     from mechanize import HTMLForm, Link
     from sqlalchemy.orm import Session
     from typing import List
+
+
+class DownloadException(BaseException):
+    """Raised when appointments can not be downloaded"""
+
+    pass
 
 
 logger = logging.getLogger("buergeramt_termine.crawler")
@@ -85,16 +92,20 @@ def download_all_appointments() -> List[Appointment]:
     loc_repo = LocationRepository(session)
     app: List[Appointment] = []
     loc_links: List[Link] = list(BR.links(text_regex=re.compile("Bürgeramt")))
-    for loc_link in loc_links:
-        loc_name = loc_link.text.split(" ", 1)[1]
-        loc = loc_repo.get_by_name(loc_name)
-        if loc is None:
-            loc = Location(name=loc_name)
-            loc_repo.add(loc)
-            session.commit()
+    try:
+        for loc_link in loc_links:
+            loc_name = loc_link.text.split(" ", 1)[1]
+            loc = loc_repo.get_by_name(loc_name)
+            if loc is None:
+                loc = Location(name=loc_name)
+                loc_repo.add(loc)
+                session.commit()
 
-        logger.debug("Getting appointments for %s", loc)
-        app.extend(_handle_location(loc_link, loc.id))
+            logger.debug("Getting appointments for %s", loc)
+            app.extend(_handle_location(loc_link, loc.id))
+    except URLError:
+        logger.warning("Failed to download appointments")
+        raise DownloadException
 
     session.close()
     return app

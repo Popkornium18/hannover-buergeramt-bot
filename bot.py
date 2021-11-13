@@ -16,7 +16,7 @@ from buergeramt_termine.repositories import (
     UserRepository,
 )
 from buergeramt_termine.models import User
-from crawler import download_all_appointments
+from crawler import DownloadException, download_all_appointments
 from notification import (
     create_notifications_new_gone,
     notification_earliest,
@@ -223,7 +223,11 @@ def _refresh_db() -> None:
     session = SessionMaker()
     loc_repo = LocationRepository(session)
     app_repo = AppointmentRepository(session)
-    app_cur = download_all_appointments()
+    try:
+        app_cur = download_all_appointments()
+    except DownloadException:
+        session.close()
+        return
 
     for loc in loc_repo.list():
         loc.set_apps_new_gone(app_cur)
