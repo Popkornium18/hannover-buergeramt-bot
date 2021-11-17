@@ -112,7 +112,7 @@ def new_deadline(message: telebot.types.Message) -> None:
         )
         bot.send_message(
             message.chat.id,
-            f"Das Datum hat nicht das richtige Format. Benutzung: /datum {next_week}",
+            f"Das Datum hat nicht das richtige Format. Benutzung: /deadline {next_week}",
         )
         return
 
