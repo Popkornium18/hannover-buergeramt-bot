@@ -4,7 +4,7 @@ greenlet==1.1.2
 html5lib==1.1
 idna==3.3
 mechanize==0.4.7
-pyTelegramBotAPI==4.2.0
+pyTelegramBotAPI==4.2.2
 requests==2.26.0
 schedule==1.1.0
 six==1.16.0
