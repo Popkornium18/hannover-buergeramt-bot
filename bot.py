@@ -1,13 +1,13 @@
 """A telegram bot that can send notifications about early appointments at the
 citizen centres (Bürgerämter) in Hannover, Germany"""
 from __future__ import annotations
-from typing import TYPE_CHECKING, Any, Coroutine, List
+from typing import TYPE_CHECKING
 import sys
 import threading
 import logging
 import datetime
 from time import sleep
-from telebot.async_telebot import AsyncTeleBot
+from telebot import TeleBot
 from telebot.types import Message
 from telebot import logger as telebot_logger
 import schedule
@@ -42,7 +42,7 @@ else:
         logging.Formatter("[%(name)s:%(asctime)s:%(levelname)s] %(message)s")
     )
 
-bot = AsyncTeleBot(cfg["API_KEY"], parse_mode="HTML")
+bot = TeleBot(cfg["API_KEY"], parse_mode="HTML")
 
 logger = logging.getLogger("buergeramt_termine")
 logger.addHandler(log_handler)
@@ -63,7 +63,7 @@ sys.excepthook = exc_handler
 
 
 @bot.message_handler(commands=["start", "Start", "help", "Help", "hilfe", "Hilfe"])
-async def usage(message: Message) -> None:
+def usage(message: Message) -> None:
     """Replies with usage information"""
     logger.info("Requesting usage info")
     next_week: str = (datetime.date.today() + datetime.timedelta(7)).strftime(
@@ -79,19 +79,19 @@ Wenn du deinen Termin bekommen hast und keine weiteren Benachrichtigungen bekomm
 
 Den Quellcode dieses Bots findest du auf <a href='https://github.com/Popkornium18/hannover-buergeramt-bot'>GitHub</a>."""
 
-    await bot.send_message(message.chat.id, reply, disable_web_page_preview=True)
+    bot.send_message(message.chat.id, reply, disable_web_page_preview=True)
 
 
 @bot.message_handler(commands=["termine", "Termine"])
-async def earliest_appointments(message: Message) -> None:
+def earliest_appointments(message: Message) -> None:
     """Sends the earliest 10 appointments currently available"""
     logger.info("Requesting earliest appointments")
     reply = notification_earliest()
-    await bot.send_message(message.chat.id, reply)
+    bot.send_message(message.chat.id, reply)
 
 
 @bot.message_handler(commands=["deadline", "Deadline"])
-async def new_deadline(message: Message) -> None:
+def new_deadline(message: Message) -> None:
     """Adds a new user or modifies the deadline of an existing one"""
     if not message.text:
         return
@@ -103,7 +103,7 @@ async def new_deadline(message: Message) -> None:
         logger.warning(
             "Invalid request: %s requires a parameter", new_deadline.__name__
         )
-        await bot.send_message(message.chat.id, f"Benutzung: /deadline {next_week}")
+        bot.send_message(message.chat.id, f"Benutzung: /deadline {next_week}")
         return
 
     try:
@@ -114,7 +114,7 @@ async def new_deadline(message: Message) -> None:
         logger.warning(
             "Invalid request: The deadline %s could not be parsed", request[1]
         )
-        await bot.send_message(
+        bot.send_message(
             message.chat.id,
             f"Das Datum hat nicht das richtige Format. Benutzung: /deadline {next_week}",
         )
@@ -136,7 +136,7 @@ async def new_deadline(message: Message) -> None:
             f"Späteste Deadline: <b>{date_considered_early.strftime('%d.%m.%Y')}</b>.\n"
         )
         reply += "Benutze /termine um die frühesten Termine anzuzeigen."
-        await bot.send_message(message.chat.id, reply)
+        bot.send_message(message.chat.id, reply)
         session.close()
         return
 
@@ -146,20 +146,20 @@ async def new_deadline(message: Message) -> None:
         if not user:
             user = User(chat_id=message.chat.id, deadline=deadline)
             user_repo.add(user)
-            await bot.send_message(
+            bot.send_message(
                 message.chat.id,
                 f"Du bekommst jetzt eine Benachrichtigung über alle Termine vor dem {deadline_str}.",
             )
         else:
             logger.info("Changing deadline of user %i", user.chat_id)
             user.deadline = deadline
-            await bot.send_message(
+            bot.send_message(
                 message.chat.id,
                 f"Deine Deadline wurde aktualisiert: {deadline_str}.",
             )
     except ValueError:
         logger.warning("Invalid request: Deadline %s is in the past", deadline_str)
-        await bot.send_message(
+        bot.send_message(
             message.chat.id,
             "Die Deadline darf nicht in der Vergangenheit liegen.",
         )
@@ -171,18 +171,18 @@ async def new_deadline(message: Message) -> None:
     session.close()
 
     if notification:
-        await bot.send_message(message.chat.id, notification)
+        bot.send_message(message.chat.id, notification)
 
 
 @bot.message_handler(commands=["stop", "Stop"])
-async def delete_user(message: Message) -> None:
+def delete_user(message: Message) -> None:
     """Deletes an existing user"""
     session: Session = SessionMaker()
     repo = UserRepository(session)
     user = repo.get_by_chat_id(message.chat.id)
     if user is None:
         logger.warning("Invalid request: User %i does not exist", message.chat.id)
-        await bot.send_message(
+        bot.send_message(
             message.chat.id,
             (
                 "Du bekommst noch keine Benachrichtigungen. "
@@ -193,7 +193,7 @@ async def delete_user(message: Message) -> None:
         return
 
     repo.delete(user)
-    await bot.send_message(
+    bot.send_message(
         message.chat.id,
         (
             "Du bekommst keine weiteren Benachrichtigungen. "
@@ -204,7 +204,7 @@ async def delete_user(message: Message) -> None:
     session.close()
 
 
-async def notify() -> None:
+def notify() -> None:
     """Loads the current appointments and sends each user a notification about
     new appointments and appointments that are no longer available"""
     session: Session = SessionMaker()
@@ -219,13 +219,10 @@ async def notify() -> None:
     if not notifications:
         logger.debug("No user needs to be notified")
     else:
-        tasks: List[Coroutine[Any, Any, Message]] = []
         for deadline, notification in notifications.items():
             for usr in user_repo.get_by_deadline(deadline):
                 logger.debug("Sending notification to %i", usr.chat_id)
-                tasks.append(bot.send_message(usr.chat_id, notification))
-        for task in tasks:
-            await task
+                bot.send_message(usr.chat_id, notification)
 
     session.commit()
     session.close()
@@ -272,7 +269,7 @@ def refresh_if_unused() -> None:
     session.close()
 
 
-async def clean_old_users() -> None:
+def clean_old_users() -> None:
     """Deletes users whose deadline is today and sends a notification about it"""
     session = SessionMaker()
     user_repo = UserRepository(session)
@@ -281,13 +278,10 @@ async def clean_old_users() -> None:
         "Benutze /deadline um sie wieder zu aktivieren."
     )
     to_delete = user_repo.get_deadline_earlier_than(datetime.date.today())
-    tasks: List[Coroutine[Any, Any, Message]] = []
     for user in to_delete:
-        tasks.append(bot.send_message(user.chat_id, message))
+        bot.send_message(user.chat_id, message)
         user_repo.delete(user)
     logger.info("Deleted %i users", len(to_delete))
-    for task in tasks:
-        await task
     session.commit()
     session.close()
 
