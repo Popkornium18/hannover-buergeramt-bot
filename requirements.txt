@@ -9,6 +9,6 @@ pyTelegramBotAPI==4.2.2
 requests==2.26.0
 schedule==1.1.0
 six==1.16.0
-SQLAlchemy==1.4.29
+SQLAlchemy==1.4.43
 urllib3==1.26.7
 webencodings==0.5.1
